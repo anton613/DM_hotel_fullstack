@@ -1,6 +1,24 @@
 from django.utils import timezone
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser,BaseUserManager
 from django.db import models,transaction
+from django.core.exceptions import ValidationError
+from decimal import Decimal
+
+class UsuarioManager(BaseUserManager):
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError('El email es obligatorio')
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('rol', 'admin')
+        return self.create_user(email, password, **extra_fields)
 
 class Usuario(AbstractUser):
     ROLES = (
@@ -18,7 +36,7 @@ class Usuario(AbstractUser):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []  # Puedes añadir campos obligatorios adicionales aquí
-
+    objects = UsuarioManager()
     class Meta:
         db_table = 'usuarios'
         verbose_name = 'Usuario'
@@ -87,6 +105,14 @@ class Habitacion(models.Model):
 
     def __str__(self):
         return f"{self.numero} - {self.tipo}"
+    
+    def clean(self):
+        if self.precio <= 0:
+            raise ValidationError("El precio debe ser positivo")
+        
+    def save(self, *args, **kwargs):
+        self.full_clean()  # Esto fuerza la validación al guardar
+        super().save(*args, **kwargs)
 
 class Cupon(models.Model):
     TIPO_DESCUENTO = (
@@ -147,6 +173,10 @@ class Cupon(models.Model):
 
     def usos_disponibles(self):
         return self.max_usos - self.usuarios_asignados.filter(usado=True).count()
+    
+    def clean(self):
+        if self.fecha_fin <= self.fecha_inicio:
+            raise ValidationError("La fecha de fin debe ser posterior a la fecha de inicio")
 
 class CuponUsuario(models.Model):
     cupon = models.ForeignKey(
@@ -277,58 +307,48 @@ class Reserva(models.Model):
         return 0
 
     def aplicar_descuento(self):
-        """Aplica el descuento si hay un cupón válido"""
         total_bruto = self.calcular_total_bruto()
-        descuento = 0
-
-        # Verificar si hay cupón y relación válida
-        if self.cupon and self.cupon_usuario:
-            if self.cupon_usuario.cupon != self.cupon or self.cupon_usuario.usuario != self.cliente:
-                return total_bruto, total_bruto, 0  # no se aplica el cupón
+        descuento = Decimal('0')
+        
+        if (self.cupon and self.cupon_usuario and
+            self.cupon_usuario.cupon == self.cupon and
+            self.cupon_usuario.usuario == self.cliente and
+            self.cupon.activo and
+            self.cupon.fecha_inicio <= timezone.now() <= self.cupon.fecha_fin and
+            not self.cupon_usuario.usado):
             
-            if self.cupon_usuario.autorizado and not self.cupon_usuario.usado:
-                if self.cupon.tipo == 'porcentaje':
-                    descuento = (total_bruto * self.cupon.valor) / 100
-                elif self.cupon.tipo == 'fijo':
-                    descuento = min(self.cupon.valor, total_bruto)
-
+            if self.cupon.tipo == 'porcentaje':
+                descuento = (total_bruto * Decimal(str(self.cupon.valor))) / Decimal('100')
+            elif self.cupon.tipo == 'fijo':
+                descuento = min(Decimal(str(self.cupon.valor)), total_bruto)
+        
         total_descuento = total_bruto - descuento
         return total_bruto, total_descuento, descuento
 
     def save(self, *args, **kwargs):
-        # Calcular total bruto (noches * precio habitación)
-        noches = (self.fecha_fin - self.fecha_inicio).days
-        self.total = noches * self.habitacion.precio
+        # Asegurar que los cálculos usen Decimal
+        noches = Decimal((self.fecha_fin - self.fecha_inicio).days)
+        self.total = noches * Decimal(str(self.habitacion.precio))
         
-        # Inicializar descuento
-        self.descuento_aplicado = 0
+        # Reiniciar descuento
+        self.descuento_aplicado = Decimal('0')
         
-        # Aplicar descuento si hay cupón válido
-        if self.cupon and self.cupon_usuario:
-            if (self.cupon_usuario.cupon == self.cupon and 
-                self.cupon_usuario.usuario == self.cliente and
-                self.cupon_usuario.autorizado and 
-                not self.cupon_usuario.usado):
-                
-                if self.cupon.tipo == 'porcentaje':
-                    self.descuento_aplicado = (self.total * self.cupon.valor) / 100
-                elif self.cupon.tipo == 'fijo':
-                    self.descuento_aplicado = min(self.cupon.valor, self.total)
-                
-                # Marcar cupón como usado
-                self.cupon_usuario.usado = True
-                self.cupon_usuario.fecha_uso = timezone.now()
-                self.cupon_usuario.save()
+        if (self.cupon and self.cupon_usuario and
+            self.cupon_usuario.cupon == self.cupon and
+            self.cupon_usuario.usuario == self.cliente and
+            self.cupon.activo and
+            timezone.now() <= self.cupon.fecha_fin and
+            not self.cupon_usuario.usado):
+            
+            if self.cupon.tipo == 'porcentaje':
+                self.descuento_aplicado = (self.total * Decimal(str(self.cupon.valor))) / Decimal('100')
+            elif self.cupon.tipo == 'fijo':
+                self.descuento_aplicado = min(Decimal(str(self.cupon.valor)), self.total)
+            
+            # Marcar cupón como usado
+            self.cupon_usuario.usado = True
+            self.cupon_usuario.fecha_uso = timezone.now()
+            self.cupon_usuario.save()
         
-        # Calcular total final
         self.total_descuento = self.total - self.descuento_aplicado
-        
         super().save(*args, **kwargs)
-
-        # Si es una nueva reserva y se aplicó descuento, marcar el cupón como usado
-        # Marcar el cupón como usado si corresponde
-        if self.cupon_usuario and self.descuento_aplicado > 0:
-            if not self.cupon_usuario.usado:
-                self.cupon_usuario.usado = True
-                self.cupon_usuario.fecha_uso = timezone.now()
-                self.cupon_usuario.save(update_fields=['usado', 'fecha_uso'])
