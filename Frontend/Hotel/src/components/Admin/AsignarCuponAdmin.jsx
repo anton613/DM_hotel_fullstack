@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Container, Card, Table, Button, Form, Alert, Spinner, Badge, Row, Col } from 'react-bootstrap';
+import { Container, Card, Table, Button, Form, Alert, Spinner, Badge, Row, Col, Pagination } from 'react-bootstrap';
 import {
     getUsuariosConEstadisticas,
     getCuponesActivos,
@@ -18,6 +18,8 @@ export default function AsignarCuponAdmin() {
     const [selectedUsers, setSelectedUsers] = useState([]);
     const [selectedCupon, setSelectedCupon] = useState('');
     const [filter, setFilter] = useState('0');
+    const [currentPage, setCurrentPage] = useState(1);
+    const usersPerPage = 10;
 
     // Cargar usuarios y cupones
     const loadData = async () => {
@@ -55,6 +57,16 @@ export default function AsignarCuponAdmin() {
         if (filter === '0') return true;
         return user.total_reservas >= parseInt(filter);
     });
+
+    // Lógica de paginación
+    const indexOfLastUser = currentPage * usersPerPage;
+    const indexOfFirstUser = indexOfLastUser - usersPerPage;
+    const currentUsers = filteredUsers.slice(indexOfFirstUser, indexOfLastUser);
+    const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+
+    const handlePageChange = (pageNumber) => {
+        setCurrentPage(pageNumber);
+    };
 
     const handleAsignarCupon = async () => {
         if (selectedUsers.length === 0) {
@@ -182,8 +194,8 @@ export default function AsignarCuponAdmin() {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredUsers.length > 0 ? (
-                                filteredUsers.map(user => (
+                            {currentUsers.length > 0 ? (
+                                currentUsers.map(user => (
                                     <tr key={user.id}>
                                         <td>
                                             <Form.Check
@@ -215,6 +227,41 @@ export default function AsignarCuponAdmin() {
                             )}
                         </tbody>
                     </Table>
+
+                    {/* Paginación */}
+                    {filteredUsers.length > usersPerPage && (
+                        <div className="d-flex justify-content-center mt-4">
+                            <Pagination>
+                                <Pagination.First 
+                                    onClick={() => handlePageChange(1)} 
+                                    disabled={currentPage === 1} 
+                                />
+                                <Pagination.Prev 
+                                    onClick={() => handlePageChange(currentPage - 1)} 
+                                    disabled={currentPage === 1} 
+                                />
+                                
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(number => (
+                                    <Pagination.Item
+                                        key={number}
+                                        active={number === currentPage}
+                                        onClick={() => handlePageChange(number)}
+                                    >
+                                        {number}
+                                    </Pagination.Item>
+                                ))}
+                                
+                                <Pagination.Next 
+                                    onClick={() => handlePageChange(currentPage + 1)} 
+                                    disabled={currentPage === totalPages} 
+                                />
+                                <Pagination.Last 
+                                    onClick={() => handlePageChange(totalPages)} 
+                                    disabled={currentPage === totalPages} 
+                                />
+                            </Pagination>
+                        </div>
+                    )}
                 </Card.Body>
             </Card>
         </Container>
