@@ -357,7 +357,7 @@ Proyecto educativo - Todos los derechos reservados.
 
 ### 📧 Contacto
 - **Desarrollador**: Equipo Integrador de Sistemas II
-- **Email**: manuel.24.sco@gmail.com
+- **Email**: manuel.26.sco@gmail.com
 - **Institución**: [Tu Institución Educativa]
 
 ---
