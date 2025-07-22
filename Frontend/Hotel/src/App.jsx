@@ -14,8 +14,11 @@ import MisReservas from "./components/cliente/MisReservas";
 import EstadisticasReservas from "./components/Admin/EstadisticasReservas";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./components/context/AuthContext";
-
-
+import ProtectedRoute from "./components/context/ProtectedRoute";
+import TipoHabitacionesAdmin from "./components/Admin/TipoHabitacionesAdmin";
+import HabitacionesAdmin from "./components/Admin/HabitacionesAdmin";
+import CuponAdmin from "./components/Admin/CuponAdmin";
+import AsignarCuponAdmin from "./components/Admin/AsignarCuponAdmin";
 function App() {
   return (
     <AuthProvider>
@@ -26,17 +29,24 @@ function App() {
             <Route path="/" element={<Habitaciones />} />
             <Route path="/login" element={<Login />} />
             <Route path="/registro" element={<Registro />} />
-            <Route path="/editar-perfil" element={<UserProfile />} />
-            <Route path="/reservar/:habitacionId" element={<Reserva />} />
-            <Route path="/mis-reservas" element={<MisReservas />} />
-            <Route path="/estadisticas" element={<EstadisticasReservas />} />
+
+            {/* rutas privadas usuario logeado */}
+            <Route path="/editar-perfil" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+            <Route path="/reservar/:habitacionId" element={<ProtectedRoute><Reserva /></ProtectedRoute>} />
+            <Route path="/mis-reservas" element={<ProtectedRoute><MisReservas /></ProtectedRoute>} />
+
+            {/* rutas para usuario tipo Admin */}
+            <Route path="/estadisticas" element={<ProtectedRoute adminOnly><EstadisticasReservas /></ProtectedRoute>}/>
+            <Route path="/tipo-habitaciones" element={<ProtectedRoute adminOnly><TipoHabitacionesAdmin /></ProtectedRoute>}/>
+            <Route path="/gestion-habitaciones" element={<ProtectedRoute adminOnly><HabitacionesAdmin /></ProtectedRoute>}/>
+            <Route path="/gestion-cupon" element={<ProtectedRoute adminOnly><CuponAdmin /></ProtectedRoute>}/>
+            <Route path="/asignar-cupon" element={<ProtectedRoute adminOnly><AsignarCuponAdmin /></ProtectedRoute>}/>
+
           </Routes>
           <Toaster />
         </BrowserRouter>
       </Container>
     </AuthProvider>
-
-
   )
 }
 

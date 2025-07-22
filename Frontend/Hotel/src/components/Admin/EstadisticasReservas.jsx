@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Container, Card, Alert, Spinner, Row, Col, Form } from 'react-bootstrap';
+import { Container, Card, Alert, Spinner, Row, Col, Form, Button } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
-import { Api } from '../../api/conexions';
+import { getReservasEstadisticas, generarReportePDF } from '../../api/conexions';
 import { Chart as ChartJS, registerables } from 'chart.js';
 import { Bar, Pie, Line, Doughnut } from 'react-chartjs-2';
 import { format, parseISO } from 'date-fns';
@@ -15,18 +15,15 @@ export default function EstadisticasReservas() {
     const [reservas, setReservas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [generandoPDF, setGenerandoPDF] = useState(false);
     const [filtroSede, setFiltroSede] = useState('Todas');
     const [filtroTiempo, setFiltroTiempo] = useState('ultimos_3_meses');
     const [filtroTipoHabitacion, setFiltroTipoHabitacion] = useState('Todos');
 
-    // Cargar todas las reservas (no solo del usuario)
+    // Cargar todas las reservas
     const loadReservas = async () => {
         try {
-            const response = await Api.get('/reservas/', {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`
-                }
-            });
+            const response = await getReservasEstadisticas(accessToken);
             setReservas(response.data);
             setLoading(false);
         } catch (err) {
@@ -45,10 +42,8 @@ export default function EstadisticasReservas() {
     // Filtrar reservas según los filtros seleccionados
     const reservasFiltradas = reservas.filter(reserva => {
         const cumpleSede = filtroSede === 'Todas' || reserva.habitacion_info.sede === filtroSede;
-
         const cumpleTipo = filtroTipoHabitacion === 'Todos' ||
             reserva.habitacion_info.tipo.nombre === filtroTipoHabitacion;
-
         const fechaReserva = parseISO(reserva.fecha_inicio);
         const ahora = new Date();
         let cumpleTiempo = true;
@@ -70,28 +65,23 @@ export default function EstadisticasReservas() {
         return cumpleSede && cumpleTiempo && cumpleTipo;
     });
 
-    // Obtener sedes únicas para el filtro
+    // Obtener sedes y tipos de habitación únicos para los filtros
     const sedes = [...new Set(reservas.map(reserva => reserva.habitacion_info.sede))];
-
-    // Obtener tipos de habitación únicos para el filtro
     const tiposHabitacion = [...new Set(reservas.map(reserva => reserva.habitacion_info.tipo.nombre))];
 
     // Preparar datos para los gráficos
     const prepararDatosGraficos = () => {
-        // Datos para gráfico de reservas por estado
         const estados = ['Pendiente', 'Check-In', 'Check-Out', 'Cancelada'];
         const datosEstados = estados.map(estado =>
             reservasFiltradas.filter(r => r.estado === estado).length
         );
 
-        // Datos para gráfico de ingresos por tipo de habitación
         const datosIngresosPorTipo = tiposHabitacion.map(tipo => {
             return reservasFiltradas
                 .filter(r => r.habitacion_info.tipo.nombre === tipo)
                 .reduce((sum, r) => sum + parseFloat(r.total), 0);
         });
 
-        // Datos para gráfico de ingresos mensuales
         const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         const datosIngresosMensuales = meses.map((mes, index) => {
             return reservasFiltradas
@@ -102,7 +92,6 @@ export default function EstadisticasReservas() {
                 .reduce((sum, r) => sum + parseFloat(r.total), 0);
         });
 
-        // Nuevo gráfico: Ocupación por sede
         const datosOcupacionSede = sedes.map(sede => {
             return reservasFiltradas
                 .filter(r => r.habitacion_info.sede === sede)
@@ -115,79 +104,72 @@ export default function EstadisticasReservas() {
         return {
             estados: {
                 labels: estados,
-                datasets: [{
-                    label: 'Reservas por Estado',
-                    data: datosEstados,
-                    backgroundColor: [
-                        'rgba(255, 206, 86, 0.7)',
-                        'rgba(54, 162, 235, 0.7)',
-                        'rgba(75, 192, 192, 0.7)',
-                        'rgba(255, 99, 132, 0.7)'
-                    ],
-                    borderColor: [
-                        'rgba(255, 206, 86, 1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(255, 99, 132, 1)'
-                    ],
-                    borderWidth: 1
-                }]
+                data: datosEstados
             },
             tiposHabitacion: {
                 labels: tiposHabitacion,
-                datasets: [{
-                    label: 'Ingresos por Tipo de Habitación (S/.)',
-                    data: datosIngresosPorTipo,
-                    backgroundColor: [
-                        'rgba(153, 102, 255, 0.7)',
-                        'rgba(255, 159, 64, 0.7)',
-                        'rgba(54, 162, 235, 0.7)',
-                        'rgba(255, 99, 132, 0.7)',
-                        'rgba(75, 192, 192, 0.7)'
-                    ],
-                    borderColor: [
-                        'rgba(153, 102, 255, 1)',
-                        'rgba(255, 159, 64, 1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 99, 132, 1)',
-                        'rgba(75, 192, 192, 1)'
-                    ],
-                    borderWidth: 1
-                }]
+                data: datosIngresosPorTipo
             },
             ingresosMensuales: {
                 labels: meses,
-                datasets: [{
-                    label: 'Ingresos Mensuales (S/.)',
-                    data: datosIngresosMensuales,
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1,
-                    tension: 0.1,
-                    fill: true
-                }]
+                data: datosIngresosMensuales
             },
             ocupacionSede: {
                 labels: sedes,
-                datasets: [{
-                    label: 'Noches Reservadas por Sede',
-                    data: datosOcupacionSede,
-                    backgroundColor: [
-                        'rgba(255, 99, 132, 0.7)',
-                        'rgba(54, 162, 235, 0.7)',
-                        'rgba(255, 206, 86, 0.7)',
-                        'rgba(75, 192, 192, 0.7)'
-                    ],
-                    borderColor: [
-                        'rgba(255, 99, 132, 1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 206, 86, 1)',
-                        'rgba(75, 192, 192, 1)'
-                    ],
-                    borderWidth: 1
-                }]
+                data: datosOcupacionSede
             }
         };
+    };
+
+    // Función para generar el reporte PDF
+    const handleGenerarReportePDF = async () => {
+        setGenerandoPDF(true);
+        try {
+            const datosGraficos = prepararDatosGraficos();
+
+            // Calcular resumen estadístico
+            const totalReservas = reservasFiltradas.length;
+            const totalIngresos = reservasFiltradas.reduce((sum, r) => sum + parseFloat(r.total), 0).toFixed(2);
+            const promedioReserva = totalReservas > 0 ? (totalIngresos / totalReservas).toFixed(2) : '0.00';
+            const totalNoches = reservasFiltradas.reduce((sum, r) => {
+                const noches = (new Date(r.fecha_fin) - new Date(r.fecha_inicio)) / (1000 * 60 * 60 * 24);
+                return sum + noches;
+            }, 0);
+
+            // Preparar datos para el PDF
+            const data = {
+                filtros: {
+                    sede: filtroSede,
+                    tipoHabitacion: filtroTipoHabitacion,
+                    tiempo: filtroTiempo === 'ultimo_mes' ? 'Último mes' :
+                        filtroTiempo === 'ultimos_3_meses' ? 'Últimos 3 meses' :
+                            filtroTiempo === 'ultimo_ano' ? 'Último año' : 'Todos los registros',
+                    totalReservas: totalReservas,
+                    totalIngresos: totalIngresos,
+                    promedioReserva: promedioReserva,
+                    totalNoches: Math.round(totalNoches)
+                },
+                datos_graficos: datosGraficos
+            };
+
+            // Generar el PDF usando la función de la API
+            const response = await generarReportePDF(data, accessToken);
+
+            // Crear enlace para descargar el PDF
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `reporte_hoteles_${new Date().toISOString().split('T')[0]}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+        } catch (err) {
+            console.error('Error al generar el reporte:', err);
+            setError('Error al generar el reporte PDF');
+        } finally {
+            setGenerandoPDF(false);
+        }
     };
 
     const datosGraficos = prepararDatosGraficos();
@@ -205,10 +187,9 @@ export default function EstadisticasReservas() {
     return (
         <Container className="my-5">
             <h2 className="mb-4">Estadísticas de Reservas</h2>
-
             {error && <Alert variant="danger">{error}</Alert>}
 
-            {/* Filtros mejorados */}
+            {/* Filtros */}
             <Card className="mb-4">
                 <Card.Body>
                     <Row>
@@ -255,6 +236,20 @@ export default function EstadisticasReservas() {
                             </Form.Group>
                         </Col>
                     </Row>
+                    <div className="text-end mt-3">
+                        <Button
+                            variant="primary"
+                            onClick={handleGenerarReportePDF}
+                            disabled={generandoPDF}
+                        >
+                            {generandoPDF ? (
+                                <>
+                                    <Spinner animation="border" size="sm" className="me-2" />
+                                    Generando PDF...
+                                </>
+                            ) : 'Generar Reporte PDF'}
+                        </Button>
+                    </div>
                 </Card.Body>
             </Card>
 
@@ -266,16 +261,33 @@ export default function EstadisticasReservas() {
                             <Card.Title>Reservas por Estado</Card.Title>
                             <div style={{ height: '300px' }}>
                                 <Bar
-                                    data={datosGraficos.estados}
+                                    data={{
+                                        labels: datosGraficos.estados.labels,
+                                        datasets: [{
+                                            label: 'Reservas por Estado',
+                                            data: datosGraficos.estados.data,
+                                            backgroundColor: [
+                                                'rgba(255, 206, 86, 0.7)',
+                                                'rgba(54, 162, 235, 0.7)',
+                                                'rgba(75, 192, 192, 0.7)',
+                                                'rgba(255, 99, 132, 0.7)'
+                                            ],
+                                            borderColor: [
+                                                'rgba(255, 206, 86, 1)',
+                                                'rgba(54, 162, 235, 1)',
+                                                'rgba(75, 192, 192, 1)',
+                                                'rgba(255, 99, 132, 1)'
+                                            ],
+                                            borderWidth: 1
+                                        }]
+                                    }}
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
                                         scales: {
                                             y: {
                                                 beginAtZero: true,
-                                                ticks: {
-                                                    stepSize: 1
-                                                }
+                                                ticks: { stepSize: 1 }
                                             }
                                         }
                                     }}
@@ -290,7 +302,28 @@ export default function EstadisticasReservas() {
                             <Card.Title>Ingresos por Tipo de Habitación</Card.Title>
                             <div style={{ height: '300px' }}>
                                 <Pie
-                                    data={datosGraficos.tiposHabitacion}
+                                    data={{
+                                        labels: datosGraficos.tiposHabitacion.labels,
+                                        datasets: [{
+                                            label: 'Ingresos por Tipo de Habitación (S/.)',
+                                            data: datosGraficos.tiposHabitacion.data,
+                                            backgroundColor: [
+                                                'rgba(153, 102, 255, 0.7)',
+                                                'rgba(255, 159, 64, 0.7)',
+                                                'rgba(54, 162, 235, 0.7)',
+                                                'rgba(255, 99, 132, 0.7)',
+                                                'rgba(75, 192, 192, 0.7)'
+                                            ],
+                                            borderColor: [
+                                                'rgba(153, 102, 255, 1)',
+                                                'rgba(255, 159, 64, 1)',
+                                                'rgba(54, 162, 235, 1)',
+                                                'rgba(255, 99, 132, 1)',
+                                                'rgba(75, 192, 192, 1)'
+                                            ],
+                                            borderWidth: 1
+                                        }]
+                                    }}
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
@@ -318,7 +351,26 @@ export default function EstadisticasReservas() {
                             <Card.Title>Ocupación por Sede (noches)</Card.Title>
                             <div style={{ height: '300px' }}>
                                 <Doughnut
-                                    data={datosGraficos.ocupacionSede}
+                                    data={{
+                                        labels: datosGraficos.ocupacionSede.labels,
+                                        datasets: [{
+                                            label: 'Noches Reservadas por Sede',
+                                            data: datosGraficos.ocupacionSede.data,
+                                            backgroundColor: [
+                                                'rgba(255, 99, 132, 0.7)',
+                                                'rgba(54, 162, 235, 0.7)',
+                                                'rgba(255, 206, 86, 0.7)',
+                                                'rgba(75, 192, 192, 0.7)'
+                                            ],
+                                            borderColor: [
+                                                'rgba(255, 99, 132, 1)',
+                                                'rgba(54, 162, 235, 1)',
+                                                'rgba(255, 206, 86, 1)',
+                                                'rgba(75, 192, 192, 1)'
+                                            ],
+                                            borderWidth: 1
+                                        }]
+                                    }}
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
@@ -343,14 +395,23 @@ export default function EstadisticasReservas() {
                             <Card.Title>Ingresos Mensuales</Card.Title>
                             <div style={{ height: '300px' }}>
                                 <Line
-                                    data={datosGraficos.ingresosMensuales}
+                                    data={{
+                                        labels: datosGraficos.ingresosMensuales.labels,
+                                        datasets: [{
+                                            label: 'Ingresos Mensuales (S/.)',
+                                            data: datosGraficos.ingresosMensuales.data,
+                                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                            borderColor: 'rgba(75, 192, 192, 1)',
+                                            borderWidth: 1,
+                                            tension: 0.1,
+                                            fill: true
+                                        }]
+                                    }}
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
                                         scales: {
-                                            y: {
-                                                beginAtZero: true
-                                            }
+                                            y: { beginAtZero: true }
                                         },
                                         plugins: {
                                             tooltip: {
@@ -369,7 +430,7 @@ export default function EstadisticasReservas() {
                 </Col>
             </Row>
 
-            {/* Resumen estadístico mejorado */}
+            {/* Resumen estadístico */}
             <Card className="mt-4">
                 <Card.Body>
                     <Card.Title>Resumen Estadístico</Card.Title>
@@ -393,8 +454,8 @@ export default function EstadisticasReservas() {
                         <Col md={3} className="text-center">
                             <h3>{
                                 reservasFiltradas.reduce((sum, r) => {
-                                    const noches = (new Date(r.fecha_fin) - new Date(r.fecha_inicio));
-                                    return sum + Math.ceil(noches / (1000 * 60 * 60 * 24));
+                                    const noches = (new Date(r.fecha_fin) - new Date(r.fecha_inicio)) / (1000 * 60 * 60 * 24);
+                                    return sum + Math.ceil(noches);
                                 }, 0)
                             }</h3>
                             <p className="text-muted">Noches reservadas</p>

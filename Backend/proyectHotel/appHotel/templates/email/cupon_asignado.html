@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; }
+        .cupon { 
+            border: 2px dashed #4CAF50; 
+            padding: 20px; 
+            margin: 20px 0;
+            text-align: center;
+            background-color: #f9f9f9;
+        }
+        .codigo { 
+            font-size: 24px; 
+            font-weight: bold; 
+            color: #4CAF50;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <p>Hola {{ usuario.first_name }},</p>
+    
+    <p>{{ mensaje }}</p>
+    
+    <div class="cupon">
+        <h3>Tu código de descuento</h3>
+        <div class="codigo">{{ cupon.codigo }}</div>
+        <p>
+            {% if cupon.tipo == 'porcentaje' %}
+                {{ cupon.valor }}% de descuento
+            {% else %}
+                S/ {{ cupon.valor }} de descuento
+            {% endif %}
+        </p>
+        <p>Válido del {{ cupon.fecha_inicio|date:"d/m/Y" }} al {{ cupon.fecha_fin|date:"d/m/Y" }}</p>
+        <p>Usos permitidos: 1</p>
+    </div>
+    
+    <p>Gracias por ser parte de nuestra comunidad.</p>
+<p>El equipo de administracion</p>
+</body>
+</html>

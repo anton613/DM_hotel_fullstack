@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-xd(v!^5a#ot84t&-1kah%oe#66i3blq@)nqf7f&+e31w=y3d=^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -138,7 +138,9 @@ REST_FRAMEWORK = {
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "https://smpjwjtp-5173.brs.devtunnels.ms", # tunel para solo pruebas de demostracion
 ]
+CORS_ALLOW_CREDENTIALS = True
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),  # Token válido por 1 día
@@ -150,3 +152,35 @@ SIMPLE_JWT = {
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# settings.py (añadir al final)
+PAYPAL_CONFIG = {
+    'mode': 'sandbox',
+    'client_id': 'AbFvBIAoq8hFuPL-o6_RNr-fVtyc4nSRpUhqR9cGXCYUeKTi19sJMki9FkHFx_TnVIkaMPxi4z_Kj3BR',
+    'client_secret': 'EEEg1lSddMgSjVh5Id5uHiUG_AbU1fZOGNoFYVqP4KLYPbm_PsSf5nPJVboQ4TbA3RRaiR672h-WfuD1'
+}
+
+PAYPAL_SANDBOX_MODE = DEBUG
+PAYPAL_CLIENT_ID = 'AbFvBIAoq8hFuPL-o6_RNr-fVtyc4nSRpUhqR9cGXCYUeKTi19sJMki9FkHFx_TnVIkaMPxi4z_Kj3BR'
+PAYPAL_SECRET = 'EEEg1lSddMgSjVh5Id5uHiUG_AbU1fZOGNoFYVqP4KLYPbm_PsSf5nPJVboQ4TbA3RRaiR672h-WfuD1'
+PAYPAL_ENVIRONMENT = 'sandbox'
+PAYPAL_BASE_URL = 'https://api-m.sandbox.paypal.com'
+if not DEBUG and PAYPAL_SANDBOX_MODE:
+    raise ValueError("¡ERROR! No se puede usar modo sandbox en producción")
+
+# configuracio Email
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # O tu servidor SMTP
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'manuel.24.sco@gmail.com'  # Reemplaza con tu email
+EMAIL_HOST_PASSWORD = 'abrf mnpq snos rkuw'  # Reemplaza con tu contraseña
+DEFAULT_FROM_EMAIL = 'manuel.24.sco@gmail.com'  # Debe ser el mismo que EMAIL_HOST_USER
+SITE_NAME = 'DM Hotel'  # Para usar en el template
+
+
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+CSRF_TRUSTED_ORIGINS = [
+    'https://smpjwjtp-8000.brs.devtunnels.ms',
+]
